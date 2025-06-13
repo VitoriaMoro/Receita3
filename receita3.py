@@ -2,7 +2,16 @@ import streamlit as st
 import requests
 from PIL import Image
 import io
-from deep_translator import GoogleTranslator 
+
+# Adicione esta verificação de instalação
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "deep_translator"])
+    from deep_translator import GoogleTranslator
+
 
 # Configuração do tradutor
 translator_pt_en = lambda text: GoogleTranslator(source='pt', target='en').translate(text)
