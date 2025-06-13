@@ -2,24 +2,14 @@ import streamlit as st
 import requests
 from PIL import Image
 import io
-
-# Adicione esta verificação de instalação
-try:
-    from deep_translator import GoogleTranslator
-except ImportError:
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "deep_translator"])
-    from deep_translator import GoogleTranslator
-
+from deep_translator import GoogleTranslator 
 
 # Configuração do tradutor
 translator_pt_en = lambda text: GoogleTranslator(source='pt', target='en').translate(text)
 translator_en_pt = lambda text: GoogleTranslator(source='en', target='pt').translate(text)
 session = requests.Session()
 
-session = requests.Session()
-
+# Função para traduzir dados de receitas (MODIFICADA)
 def translate_recipe_data(recipe_data):
     try:
         # Traduz campos principais
@@ -28,23 +18,24 @@ def translate_recipe_data(recipe_data):
         recipe_data['strArea'] = translator_en_pt(recipe_data.get('strArea', ''))
         recipe_data['strInstructions'] = translator_en_pt(recipe_data.get('strInstructions', ''))
         
-        # Traduz ingredientes e medidas
+        # Traduz ingredientes E medidas
         for i in range(1, 21):
+            # Traduz ingredientes
             ingredient_key = f'strIngredient{i}'
+            if recipe_data.get(ingredient_key) and recipe_data[ingredient_key].strip():
+                recipe_data[ingredient_key] = translator_en_pt(recipe_data[ingredient_key].strip())
+            
+            # Traduz medidas (NOVO)
             measure_key = f'strMeasure{i}'
-            
-            if recipe_data.get(ingredient_key):
-                recipe_data[ingredient_key] = translator_en_pt(recipe_data[ingredient_key])
-            
-            if recipe_data.get(measure_key):
-                recipe_data[measure_key] = translator_en_pt(recipe_data[measure_key])
+            if recipe_data.get(measure_key) and recipe_data[measure_key].strip():
+                recipe_data[measure_key] = translator_en_pt(recipe_data[measure_key].strip())
                 
         return recipe_data
     except Exception as e:
         st.error(f"Erro na tradução: {e}")
         return recipe_data
 
-# Função para buscar receitas por ingredientes
+# Função para buscar receitas por ingredientes (MODIFICADA)
 def get_recipes_by_matching_ingredients(user_ingredients, area=None, max_recipes=10):
     # Traduz ingredientes para inglês
     translated_ingredients = [translator_pt_en(ing.lower().strip()) for ing in user_ingredients]
@@ -79,21 +70,27 @@ def get_recipes_by_matching_ingredients(user_ingredients, area=None, max_recipes
             if area and area != "Todos" and recipe_data.get('strArea') != area:
                 continue
 
-            recipe_ingredients = []
+            # Armazena ingredientes com medidas (MODIFICADO)
+            recipe_ingredients_with_measures = []
             for i in range(1, 21):
                 ingredient_key = f'strIngredient{i}'
+                measure_key = f'strMeasure{i}'
+                
                 if recipe_data.get(ingredient_key) and recipe_data[ingredient_key].strip():
                     ingredient = recipe_data[ingredient_key].strip().lower()
-                    recipe_ingredients.append(ingredient)
+                    measure = recipe_data.get(measure_key, '').strip()
+                    
+                    # Combina medida e ingrediente
+                    recipe_ingredients_with_measures.append(f"{measure} {ingredient}")
 
             # Verifica correspondência com ingredientes originais (em português)
-            matches = sum(1 for ing in recipe_ingredients 
-                         if any(orig_ing.lower() in ing for orig_ing in user_ingredients))
-            total_ingredients = len(recipe_ingredients)
+            matches = sum(1 for ing_pair in recipe_ingredients_with_measures 
+                         if any(orig_ing.lower() in ing_pair for orig_ing in user_ingredients))
+            total_ingredients = len(recipe_ingredients_with_measures)
 
             recipe_object = {
                 'data': recipe_data,
-                'ingredients': recipe_ingredients,
+                'ingredients': recipe_ingredients_with_measures,  # AGORA CONTÉM MEDIDAS
                 'matches': matches,
                 'total': total_ingredients
             }
@@ -150,7 +147,7 @@ def get_areas():
     except requests.exceptions.RequestException:
         return ["Todos"]
 
-# Função para exibir receitas
+# Função para exibir receitas (MODIFICADA para mostrar medidas)
 def display_recipe(recipe, user_ingredients, is_main=False):
     recipe_data = recipe['data']
     recipe_id = recipe_data['idMeal']
@@ -181,13 +178,11 @@ def display_recipe(recipe, user_ingredients, is_main=False):
             col2.markdown(f"📺 [Vídeo no YouTube]({recipe_data['strYoutube']})")
 
         st.subheader("📋 Ingredientes:")
-        for ing in recipe['ingredients']:
-            match_indicator = "✅" if any(orig_ing.lower() in ing for orig_ing in user_ingredients) else "❌"
-            measure = recipe_data.get(f'strMeasure{i}', '').strip()
-            ingredient = recipe_data.get(f'strIngredient{i}', '').strip()
-            if ingredient:
-                st.markdown(f"• {measure} {ingredient.capitalize()}")
-        
+        # Agora exibe medida + ingrediente (MODIFICADO)
+        for ing_pair in recipe['ingredients']:
+            match_indicator = "✅" if any(orig_ing.lower() in ing_pair for orig_ing in user_ingredients) else "❌"
+            st.markdown(f"{match_indicator} {ing_pair.capitalize()}")
+
         st.subheader("👩‍🍳 Instruções:")
         st.write(recipe_data['strInstructions'])
         
@@ -316,164 +311,3 @@ with st.sidebar:
                         if st.button("Ver", key=f"view_rated_{recipe_id}", use_container_width=True):
                             st.session_state.selected_recipe = recipe_data_obj
                             st.rerun()
-
-
-
-# 1. Mostrar Receitas de Países
-if st.session_state.get('show_random_recipes', False):
-    st.subheader(f"🍜 Receitas Típicas de {st.session_state.selected_country}")
-
-    if not st.session_state.get('country_recipes'):
-        st.warning(f"Não encontramos receitas de {st.session_state.selected_country}.")
-    else:
-        for recipe in st.session_state.country_recipes:
-            title_html = f"<h3 style='font-size:22px; margin-bottom:10px;'>{recipe['strMeal']}</h3>"
-            st.markdown(title_html, unsafe_allow_html=True)
-
-            with st.expander("Ver Receita", expanded=True):
-                try:
-                    recipe_id = recipe['idMeal']
-                    if recipe_id not in st.session_state.all_recipes_data:
-                        recipe_ingredients = [recipe.get(f'strIngredient{i}', '').strip() 
-                                            for i in range(1, 21) 
-                                            if recipe.get(f'strIngredient{i}', '').strip()]
-                        
-                        st.session_state.all_recipes_data[recipe_id] = {
-                            'data': recipe,
-                            'ingredients': recipe_ingredients,
-                            'matches': 0,
-                            'total': len(recipe_ingredients)
-                        }
-
-                    if recipe.get('strMealThumb'):
-                        try:
-                            response_img = requests.get(recipe['strMealThumb'])
-                            img = Image.open(io.BytesIO(response_img.content))
-                            col1, col2, col3 = st.columns([1, 2, 1])
-                            with col2:
-                                st.image(img, caption=recipe['strMeal'], width=300)
-                        except:
-                            st.warning("Não foi possível carregar a imagem da receita.")
-
-                    st.caption(f"🗂️ Categoria: {recipe.get('strCategory', 'N/A')}")
-                    st.caption(f"🌍 Cozinha: {recipe.get('strArea', 'N/A')}")
-
-                    st.subheader("📋 Ingredientes:")
-                    for i in range(1, 21):
-                        measure = recipe.get(f'strMeasure{i}', '').strip()
-                        ingredient = recipe.get(f'strIngredient{i}', '').strip()
-                        if ingredient:
-                            st.markdown(f"- {measure} {ingredient}")
-                   
-                    st.subheader("👩‍🍳 Instruções:")
-                    st.write(recipe['strInstructions'])
-
-                    current_rating = st.session_state.user_ratings.get(recipe_id, 0)
-                    new_rating = st.slider("Avalie esta receita:", 1, 5, current_rating, key=f"rate_country_{recipe_id}")
-                    if st.button("Salvar Avaliação", key=f"save_country_{recipe_id}"):
-                        st.session_state.user_ratings[recipe_id] = new_rating
-                        st.success("Avaliação salva!")
-                        st.rerun()
-
-                except (requests.exceptions.RequestException, KeyError, IndexError):
-                    st.error("Erro ao carregar detalhes da receita.")
-
-# 2. Mostrar Receita Selecionada da Barra Lateral
-elif 'selected_recipe' in st.session_state:
-    recipe = st.session_state.selected_recipe
-    recipe_data = recipe['data']
-    recipe_id = recipe_data['idMeal']
-
-    title_html = f"<h2 style='font-size:28px; margin-bottom:15px;'>{recipe_data['strMeal']}</h2>"
-    st.markdown(title_html, unsafe_allow_html=True)
-
-    if recipe_data.get('strMealThumb'):
-        try:
-            response_img = requests.get(recipe_data['strMealThumb'])
-            img = Image.open(io.BytesIO(response_img.content))
-            col1, col2, col3 = st.columns([1, 3, 1])
-            with col2:
-                st.image(img, width=350)
-        except:
-            st.warning("Não foi possível carregar a imagem da receita")
-
-    if 'matches' in recipe and 'total' in recipe and recipe['total'] > 0:
-        st.caption(f"🎯 Compatibilidade: {recipe['matches']}/{recipe['total']} ingredientes")
-        st.progress(recipe['matches'] / recipe['total'])
-
-    if recipe_id in st.session_state.user_ratings:
-        st.subheader(f"⭐ Sua Avaliação: {st.session_state.user_ratings[recipe_id]}/5")
-
-    current_rating = st.session_state.user_ratings.get(recipe_id, 0)
-    new_rating = st.slider("Atualize sua avaliação:", 1, 5, current_rating, key=f"rate_selected_{recipe_id}")
-
-    if st.button("Salvar Avaliação", key=f"btn_rate_selected_{recipe_id}"):
-        st.session_state.user_ratings[recipe_id] = new_rating
-        st.success("Avaliação atualizada com sucesso!")
-        st.rerun()
-
-    col1, col2 = st.columns(2)
-    if recipe_data.get('strSource'):
-        col1.markdown(f"🔗 [Receita Original]({recipe_data['strSource']})")
-    if recipe_data.get('strYoutube'):
-        col2.markdown(f"📺 [Vídeo no YouTube]({recipe_data['strYoutube']})")
-
-    st.subheader("📋 Ingredientes:")
-    for ing in recipe['ingredients']:
-        st.markdown(f"• {ing.capitalize()}")
-
-    st.subheader("👩‍🍳 Instruções:")
-    st.write(recipe_data['strInstructions'])
-    st.caption(f"🗂️ Categoria: {recipe_data.get('strCategory', 'N/A')}")
-    st.caption(f"🌍 Cozinha: {recipe_data.get('strArea', 'N/A')}")
-
-# 3. Mostrar Busca por Ingredientes (Página Inicial)
-else:
-    st.subheader("🔍 Buscar por Ingredientes")
-    user_input = st.text_input(
-        "Digite seus ingredientes (separados por vírgula):",
-        placeholder="Ex: frango, arroz, cebola",
-        key="ingredient_input"
-    )
-    country_filter = st.selectbox("Filtrar por país (opcional):", get_areas(), key="country_filter")
-
-    if st.button("Buscar Receitas"):
-        if not user_input:
-            st.warning("Por favor, digite pelo menos um ingrediente!")
-            st.stop()
-
-        user_ingredients = [ing.strip() for ing in user_input.split(',') if ing.strip()]
-        with st.spinner("Procurando receitas incríveis para você..."):
-            # Converte filtro de país para inglês se necessário
-            try:
-                if country_filter != "Todos":
-                    country_en = GoogleTranslator(source='pt', target='en').translate(country_filter)
-                else:
-                    country_en = None
-            except:
-                country_en = None
-                
-            recipes = get_recipes_by_matching_ingredients(user_ingredients, country_en)
-
-        if not recipes:
-            st.error("Nenhuma receita encontrada. Tente outros ingredientes!")
-        else:
-            main_recipe = recipes[0]
-            if main_recipe not in st.session_state.saved_main_recipes:
-                st.session_state.saved_main_recipes.insert(0, main_recipe)
-            st.session_state.saved_main_recipes = st.session_state.saved_main_recipes[:10]
-
-            st.success(f"🔍 Encontradas {len(recipes)} receitas!")
-            st.subheader("🥇 Receita Principal")
-            display_recipe(main_recipe, user_ingredients, is_main=True)
-
-            if len(recipes) > 1:
-                st.subheader("🥈 Outras Opções")
-                cols = st.columns(min(2, len(recipes)-1))
-                for idx in range(1, min(3, len(recipes))):
-                     with cols[idx-1]:
-                         display_recipe(recipes[idx], user_ingredients)
-
-
-st.markdown("---")
-st.markdown("Desenvolvido usando [TheMealDB API](https://www.themealdb.com/)")
