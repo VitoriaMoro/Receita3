@@ -174,8 +174,11 @@ def display_recipe(recipe, user_ingredients, is_main=False):
         st.subheader("📋 Ingredientes:")
         for ing in recipe['ingredients']:
             match_indicator = "✅" if any(orig_ing.lower() in ing for orig_ing in user_ingredients) else "❌"
-            st.markdown(f"• {ing.capitalize()}")
-
+           measure = recipe_data.get(f'strMeasure{i}', '').strip()
+        ingredient = recipe_data.get(f'strIngredient{i}', '').strip()
+        if ingredient:
+            st.markdown(f"• {measure} {ingredient.capitalize()}")
+        
         st.subheader("👩‍🍳 Instruções:")
         st.write(recipe_data['strInstructions'])
         
@@ -348,11 +351,11 @@ if st.session_state.get('show_random_recipes', False):
 
                     st.subheader("📋 Ingredientes:")
                     for i in range(1, 21):
-                        ingredient = recipe.get(f'strIngredient{i}', '').strip()
                         measure = recipe.get(f'strMeasure{i}', '').strip()
+                        ingredient = recipe.get(f'strIngredient{i}', '').strip()
                         if ingredient:
-                            st.markdown(f"• {ing.capitalize()}")
-
+                            st.markdown(f"- {measure} {ingredient}")
+                   
                     st.subheader("👩‍🍳 Instruções:")
                     st.write(recipe['strInstructions'])
 
