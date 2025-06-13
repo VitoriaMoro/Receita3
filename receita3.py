@@ -11,7 +11,6 @@ session = requests.Session()
 
 session = requests.Session()
 
-# Função para traduzir dados de receitas
 def translate_recipe_data(recipe_data):
     try:
         # Traduz campos principais
@@ -20,11 +19,16 @@ def translate_recipe_data(recipe_data):
         recipe_data['strArea'] = translator_en_pt(recipe_data.get('strArea', ''))
         recipe_data['strInstructions'] = translator_en_pt(recipe_data.get('strInstructions', ''))
         
-        # Traduz ingredientes
+        # Traduz ingredientes e medidas
         for i in range(1, 21):
             ingredient_key = f'strIngredient{i}'
+            measure_key = f'strMeasure{i}'
+            
             if recipe_data.get(ingredient_key):
                 recipe_data[ingredient_key] = translator_en_pt(recipe_data[ingredient_key])
+            
+            if recipe_data.get(measure_key):
+                recipe_data[measure_key] = translator_en_pt(recipe_data[measure_key])
                 
         return recipe_data
     except Exception as e:
@@ -170,7 +174,7 @@ def display_recipe(recipe, user_ingredients, is_main=False):
         st.subheader("📋 Ingredientes:")
         for ing in recipe['ingredients']:
             match_indicator = "✅" if any(orig_ing.lower() in ing for orig_ing in user_ingredients) else "❌"
-            st.markdown(f"{match_indicator} {ing.capitalize()}")
+            st.markdown(f"• {ing.capitalize()}")
 
         st.subheader("👩‍🍳 Instruções:")
         st.write(recipe_data['strInstructions'])
@@ -347,7 +351,7 @@ if st.session_state.get('show_random_recipes', False):
                         ingredient = recipe.get(f'strIngredient{i}', '').strip()
                         measure = recipe.get(f'strMeasure{i}', '').strip()
                         if ingredient:
-                            st.markdown(f"- {measure} {ingredient}")
+                            st.markdown(f"• {ing.capitalize()}")
 
                     st.subheader("👩‍🍳 Instruções:")
                     st.write(recipe['strInstructions'])
