@@ -174,10 +174,10 @@ def display_recipe(recipe, user_ingredients, is_main=False):
         st.subheader("📋 Ingredientes:")
         for ing in recipe['ingredients']:
             match_indicator = "✅" if any(orig_ing.lower() in ing for orig_ing in user_ingredients) else "❌"
-           measure = recipe_data.get(f'strMeasure{i}', '').strip()
-        ingredient = recipe_data.get(f'strIngredient{i}', '').strip()
-        if ingredient:
-            st.markdown(f"• {measure} {ingredient.capitalize()}")
+            measure = recipe_data.get(f'strMeasure{i}', '').strip()
+            ingredient = recipe_data.get(f'strIngredient{i}', '').strip()
+            if ingredient:
+                st.markdown(f"• {measure} {ingredient.capitalize()}")
         
         st.subheader("👩‍🍳 Instruções:")
         st.write(recipe_data['strInstructions'])
